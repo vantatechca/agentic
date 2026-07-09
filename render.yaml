@@ -1,0 +1,142 @@
+# ============================================================================
+# Agentic — Render Blueprint (https://render.com/docs/blueprint-spec)
+#
+# Deploys two services that share one env-var group:
+#   • agentic-web    — the Next.js app (dashboard, console, studio, admin, APIs)
+#   • agentic-worker — the BullMQ worker (comment dispatch + scheduled publisher)
+#
+# Postgres is external (Neon) and Redis is external (Upstash) — set DATABASE_URL
+# and REDIS_URL in the group below. Deploy: push this file, then in Render click
+# "New +" → "Blueprint" and point it at the repo.
+#
+# Env-var conventions:
+#   value:          a real default (edit freely; non-secret)
+#   sync: false     a secret — leave blank here, set it in the Render dashboard
+#   generateValue   Render generates a secure random value on first deploy
+# ============================================================================
+
+envVarGroups:
+  - name: agentic-env
+    envVars:
+      # ---- runtime ---------------------------------------------------------
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+
+      # ---- app -------------------------------------------------------------
+      - key: NEXT_PUBLIC_APP_NAME
+        value: Agentic
+      # Auto-generated strong secret for the admin API/UI gate.
+      - key: ADMIN_API_TOKEN
+        generateValue: true
+
+      # ---- database (Neon) — REQUIRED -------------------------------------
+      # Paste the Neon connection string (include ?sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+
+      # ---- redis (Upstash) — required for the worker/queue ----------------
+      # Use the rediss:// TLS URL from Upstash.
+      - key: REDIS_URL
+        sync: false
+
+      # ---- AI providers (DeepSeek primary -> Claude fallback) --------------
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+
+      # ---- Discord webhooks (per-niche channels overridable in-app) --------
+      - key: DISCORD_WEBHOOK_ALERTS
+        sync: false
+      - key: DISCORD_WEBHOOK_TRENDS
+        sync: false
+      - key: DISCORD_WEBHOOK_FLEET_HEALTH
+        sync: false
+
+      # ---- Inngest (crons/events) -----------------------------------------
+      - key: INNGEST_EVENT_KEY
+        sync: false
+      - key: INNGEST_SIGNING_KEY
+        sync: false
+
+      # ---- Platform APIs ---------------------------------------------------
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: IG_GRAPH_API_TOKEN
+        sync: false
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+
+      # ---- Scrapers (Apify; empty => IG/TikTok manual-refresh fallback) ----
+      - key: APIFY_TOKEN
+        sync: false
+      # Optional actor overrides (defaults are set in code):
+      # - key: APIFY_IG_ACTOR
+      #   value: apify~instagram-profile-scraper
+      # - key: APIFY_TIKTOK_ACTOR
+      #   value: clockworks~tiktok-profile-scraper
+
+services:
+  # ---- Next.js web service --------------------------------------------------
+  - type: web
+    name: agentic-web
+    runtime: node
+    plan: starter          # free | starter | standard | pro
+    region: oregon         # oregon | frankfurt | singapore | ohio | virginia
+    branch: main
+    autoDeploy: true
+    # --include=dev keeps typescript/eslint for `next build` even with
+    # NODE_ENV=production (npm would otherwise prune devDependencies).
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - fromGroup: agentic-env
+
+  # ---- BullMQ worker (continuous background jobs) ---------------------------
+  - type: worker
+    name: agentic-worker
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    # Worker runs via tsx (installed with --include=dev, persists to runtime).
+    buildCommand: npm ci --include=dev
+    startCommand: npm run worker
+    envVars:
+      - fromGroup: agentic-env
+
+# ---------------------------------------------------------------------------
+# CRONS: this app uses Inngest for scheduling (src/inngest/functions.ts),
+# served at /api/inngest. After deploy, register the web service URL in the
+# Inngest dashboard and set INNGEST_EVENT_KEY / INNGEST_SIGNING_KEY above.
+#
+# Prefer Render-native cron instead of Inngest? Add jobs like the one below
+# that call the on-demand endpoints (they are ADMIN_API_TOKEN-gated):
+#
+# - type: cron
+#   name: agentic-yt-poll
+#   runtime: node
+#   schedule: "*/5 * * * *"
+#   branch: main
+#   buildCommand: npm ci --include=dev
+#   startCommand: >-
+#     curl -fsS -X POST "$WEB_URL/api/monitoring/poll"
+#     -H "x-admin-token: $ADMIN_API_TOKEN"
+#     -H "content-type: application/json" -d '{"platform":"youtube"}'
+#   envVars:
+#     - fromGroup: agentic-env
+#     - key: WEB_URL
+#       value: https://agentic-web.onrender.com
+# ---------------------------------------------------------------------------

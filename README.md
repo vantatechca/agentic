@@ -100,6 +100,20 @@ The part that keeps 50+ accounts alive, implemented in `src/safety/`:
 Every generation path runs the scrubber + simhash pre-display; every posted
 comment passes a second live safety gate in `comment-studio/record.ts`.
 
+## Deploy (Render + Neon + Upstash)
+
+1. **Database (Neon):** create a project, then run [`schema.sql`](schema.sql) in
+   the Neon SQL editor (or `psql "$DATABASE_URL" -f schema.sql`). It's idempotent.
+2. **Redis (Upstash):** create a database, copy the `rediss://` URL.
+3. **Render:** push the repo, then **New + → Blueprint** and select it —
+   [`render.yaml`](render.yaml) provisions the web service + BullMQ worker with a
+   shared env-var group. Fill the `sync: false` secrets (at minimum `DATABASE_URL`
+   and `REDIS_URL`) in the Render dashboard; `ADMIN_API_TOKEN` is auto-generated.
+4. **Crons:** register the deployed web URL in the Inngest dashboard and set
+   `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`. (Or use Render-native cron — see
+   the commented block in `render.yaml`.)
+5. Optionally `npm run db:seed` once to load demo niches/agents/accounts.
+
 ## Notes
 
 - The `@/*` path alias resolves via `tsconfig.json`. `tsx` scripts (worker,
