@@ -13,11 +13,8 @@ import { z } from "zod";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
-  // Required
+  // Required — also backs the job queue (pg-boss); no Redis needed.
   DATABASE_URL: z.string().url().optional(),
-
-  // Redis / queue
-  REDIS_URL: z.string().optional(),
 
   // App
   ADMIN_API_TOKEN: z.string().default("change-me-in-prod"),
@@ -61,7 +58,8 @@ export const env = parsed.data;
 /** Small capability flags derived from which keys are present. */
 export const capabilities = {
   hasDb: Boolean(env.DATABASE_URL),
-  hasRedis: Boolean(env.REDIS_URL),
+  // The queue (pg-boss) runs on Postgres, so it's available whenever the DB is.
+  hasQueue: Boolean(env.DATABASE_URL),
   hasDeepSeek: Boolean(env.DEEPSEEK_API_KEY),
   hasClaude: Boolean(env.ANTHROPIC_API_KEY),
   hasAnyAI: Boolean(env.DEEPSEEK_API_KEY || env.ANTHROPIC_API_KEY),

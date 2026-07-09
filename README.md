@@ -13,7 +13,7 @@ AdsPower elsewhere).
 
 - **Next.js 14** (App Router) — dashboard, agent console, studio, admin, API routes
 - **Neon Postgres + Drizzle ORM** — schema, migrations, queries
-- **BullMQ + Upstash Redis** — comment dispatch + scheduled-post publisher
+- **pg-boss (on Neon Postgres)** — comment dispatch + scheduled-post publisher (no Redis)
 - **Inngest** — cron jobs (watchlist polls, trend scans, digests, health recalc)
 - **DeepSeek → Claude Sonnet** — AI provider with automatic fallback, JSON-out
 - **Discord webhooks** — alerts, trend digests, fleet-health
@@ -51,7 +51,7 @@ agent-console/ round-robin alert assignment
 analytics/     agent stats + engagement sweep
 discord/       per-niche webhook routing
 inngest/       client + all cron functions  (spec §5)
-queue/         BullMQ connection, queues, worker
+queue/         pg-boss connection, queues, worker (Postgres-backed)
 ```
 
 ## Getting started
@@ -67,7 +67,7 @@ npm run db:seed             # seed niches, demo agents/accounts, a YT watch targ
 # app
 npm run dev                 # http://localhost:3000
 
-# background workers (separate process; needs REDIS_URL)
+# background workers (separate process; uses the same DATABASE_URL)
 npm run worker
 
 # inngest crons (local dev)
@@ -75,7 +75,7 @@ npm run inngest:dev
 ```
 
 Only `DATABASE_URL` is required to boot. Missing keys degrade gracefully:
-no AI key → generators error only when invoked; no Redis → dispatch logs
+no AI key → generators error only when invoked; no database → dispatch logs
 instead of enqueuing; no Discord webhook → notifications log to console; no
 scraper → IG/TikTok targets drop to manual-refresh via the circuit breaker.
 
@@ -100,19 +100,25 @@ The part that keeps 50+ accounts alive, implemented in `src/safety/`:
 Every generation path runs the scrubber + simhash pre-display; every posted
 comment passes a second live safety gate in `comment-studio/record.ts`.
 
-## Deploy (Render + Neon + Upstash)
+## Deploy (Render + Neon)
+
+No Redis required — the job queue (pg-boss) runs on the same Neon Postgres.
 
 1. **Database (Neon):** create a project, then run [`schema.sql`](schema.sql) in
    the Neon SQL editor (or `psql "$DATABASE_URL" -f schema.sql`). It's idempotent.
-2. **Redis (Upstash):** create a database, copy the `rediss://` URL.
-3. **Render:** push the repo, then **New + → Blueprint** and select it —
-   [`render.yaml`](render.yaml) provisions the web service + BullMQ worker with a
-   shared env-var group. Fill the `sync: false` secrets (at minimum `DATABASE_URL`
-   and `REDIS_URL`) in the Render dashboard; `ADMIN_API_TOKEN` is auto-generated.
-4. **Crons:** register the deployed web URL in the Inngest dashboard and set
+   pg-boss creates its own `pgboss` schema automatically on first worker start.
+2. **Render:** push the repo, then **New + → Blueprint** and select it —
+   [`render.yaml`](render.yaml) provisions the web service + pg-boss worker with a
+   shared env-var group. Fill the `sync: false` secrets (at minimum `DATABASE_URL`)
+   in the Render dashboard; `ADMIN_API_TOKEN` is auto-generated.
+3. **Crons:** register the deployed web URL in the Inngest dashboard and set
    `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`. (Or use Render-native cron — see
    the commented block in `render.yaml`.)
-5. Optionally `npm run db:seed` once to load demo niches/agents/accounts.
+4. Optionally `npm run db:seed` once to load demo niches/agents/accounts.
+
+> Note: the worker polls Postgres for jobs, which keeps your Neon compute awake.
+> On Neon's free tier that's fine; on paid tiers it means the compute won't
+> autosuspend while the worker runs.
 
 ## Notes
 

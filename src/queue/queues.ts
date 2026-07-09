@@ -1,14 +1,14 @@
-import { Queue } from "bullmq";
-import { getConnection, QUEUE_NAMES } from "./connection";
+import { getBoss, QUEUE_NAMES } from "./connection";
 
 /**
  * Queue producers (spec §5): comment-queue dispatch (jitter windows) and the
- * scheduled-post publisher (per-account rate caps). Both run "continuous" via a
- * BullMQ worker (src/queue/worker.ts).
+ * scheduled-post publisher (per-account rate caps). Both are continuous via the
+ * pg-boss worker (src/queue/worker.ts).
  *
- * Jobs are added with delays computed from the comment window / scheduledAt so
- * BullMQ handles the timing; the worker enforces per-account rate caps at
- * execution time.
+ * Jobs are scheduled with `startAfter` (the comment window start / scheduledAt)
+ * so pg-boss handles the timing; the worker enforces per-account rate caps at
+ * execution time. When no database is configured, producers no-op (logged) so
+ * P1 features that don't strictly need the queue still work.
  */
 
 export type CommentDispatchJob = {
@@ -21,57 +21,37 @@ export type PostPublishJob = {
   scheduledPostId: number;
 };
 
-let _commentQueue: Queue<CommentDispatchJob> | null = null;
-let _postQueue: Queue<PostPublishJob> | null = null;
-
-export function commentQueue(): Queue<CommentDispatchJob> | null {
-  const connection = getConnection();
-  if (!connection) return null;
-  if (!_commentQueue) {
-    _commentQueue = new Queue<CommentDispatchJob>(QUEUE_NAMES.commentDispatch, { connection });
-  }
-  return _commentQueue;
-}
-
-export function postQueue(): Queue<PostPublishJob> | null {
-  const connection = getConnection();
-  if (!connection) return null;
-  if (!_postQueue) {
-    _postQueue = new Queue<PostPublishJob>(QUEUE_NAMES.postPublisher, { connection });
-  }
-  return _postQueue;
-}
-
-/** Enqueue a comment dispatch at the window start (delay from now). */
+/** Enqueue a comment dispatch at the window start. */
 export async function enqueueCommentDispatch(job: CommentDispatchJob): Promise<void> {
-  const q = commentQueue();
-  if (!q) {
-    console.log("[queue] no redis — comment dispatch not enqueued:", job);
+  const boss = await getBoss();
+  if (!boss) {
+    console.log("[queue] no database — comment dispatch not enqueued:", job);
     return;
   }
-  const delay = Math.max(0, new Date(job.runAt).getTime() - Date.now());
-  await q.add("dispatch", job, {
-    delay,
-    attempts: 3,
-    backoff: { type: "exponential", delay: 5_000 },
-    removeOnComplete: 1000,
-    removeOnFail: 5000,
+  await boss.send(QUEUE_NAMES.commentDispatch, job, {
+    startAfter: new Date(job.runAt),
+    retryLimit: 3,
+    retryDelay: 5, // seconds
+    retryBackoff: true,
+    expireInSeconds: 600,
   });
 }
 
 /** Enqueue a scheduled post publish at scheduledAt. */
 export async function enqueuePostPublish(scheduledPostId: number, scheduledAt: Date): Promise<void> {
-  const q = postQueue();
-  if (!q) {
-    console.log("[queue] no redis — post publish not enqueued:", scheduledPostId);
+  const boss = await getBoss();
+  if (!boss) {
+    console.log("[queue] no database — post publish not enqueued:", scheduledPostId);
     return;
   }
-  const delay = Math.max(0, scheduledAt.getTime() - Date.now());
-  await q.add("publish", { scheduledPostId }, {
-    delay,
-    attempts: 3,
-    backoff: { type: "exponential", delay: 10_000 },
-    removeOnComplete: 1000,
-    removeOnFail: 5000,
-  });
+  await boss.send(
+    QUEUE_NAMES.postPublisher,
+    { scheduledPostId },
+    {
+      startAfter: scheduledAt,
+      retryLimit: 3,
+      retryDelay: 10,
+      retryBackoff: true,
+    },
+  );
 }
