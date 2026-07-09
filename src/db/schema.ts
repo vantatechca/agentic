@@ -221,6 +221,30 @@ export const scheduledPosts = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// media_assets — media library for the scheduler (P3)
+// mediaRef is a public URL (link-based) or a storage key (R2/S3) — Open item #3.
+// ─────────────────────────────────────────────────────────────────────────────
+export const mediaKindEnum = pgEnum("media_kind", ["image", "video"]);
+
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: serial("id").primaryKey(),
+    nicheKey: text("niche_key"),
+    accountId: integer("account_id"),
+    kind: mediaKindEnum("kind").notNull(),
+    // Public URL (required for IG Graph publish + link-based flows) OR storage key.
+    url: text("url"),
+    storageKey: text("storage_key"),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    nicheIdx: index("media_assets_niche_idx").on(t.nicheKey),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // trends — per-niche trend digest opportunities (P2)
 // ─────────────────────────────────────────────────────────────────────────────
 export const trends = pgTable(

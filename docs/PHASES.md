@@ -52,13 +52,25 @@ adapter interfaces so live implementations slot in without refactoring callers.
 > Allowlist `youtube.com` / `trends.google.com` (or set `APIFY_TOKEN`) to enable
 > the live success paths.
 
-## P3 — Scheduler 🟡 (scaffolded)
+## P3 — Scheduler ✅ (implemented)
 
 - [x] `PostAdapter` interface + per-platform adapters + BullMQ publisher pipeline.
 - [x] TikTok reminder-fallback (returns `needs_human`, notifies Discord).
-- [ ] YouTube `videos.insert` upload via per-account OAuth (`adapters/index.ts`).
-- [ ] IG Graph media container → publish for business accounts.
-- [ ] Media library: upload target (R2/S3 vs Drive links) — Open item #3.
+- [x] **YouTube upload** — `videos.insert` multipart upload via per-account OAuth
+      token, fetches media bytes from the public URL (`adapters/youtube.ts`).
+- [x] **Instagram Graph publish** — real container → media_publish flow for
+      business accounts, image + REELS video (`adapters/instagram.ts`).
+- [x] **Media library** (`scheduler/media.ts`): `MediaStore` interface, link-based
+      store live; R2/S3 pluggable via `resolveUrl` (Open item #3). `media_assets`
+      table + register/list APIs.
+- [x] Create flow (`scheduler/create.ts`): resolve media → optional Caption
+      Studio generation (bank hashtags) → persist → enqueue at `scheduledAt`.
+- [x] APIs: `/api/media`, `/api/scheduled-posts` (create/list), manual
+      `/api/scheduled-posts/[id]/publish`. Admin UI: **Scheduler** page.
+
+> YT/IG publish activate when the account carries the right `authTokens`
+> (`{ accessToken }` for YT; `{ igUserId, accessToken }` for IG). Without them,
+> posts record as `needs_human` (reminder flow) — never silently dropped.
 
 ## P4 — Feedback 🟡 (scaffolded)
 
