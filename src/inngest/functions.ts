@@ -5,8 +5,9 @@ import { scanNiche } from "@/trends/scan";
 import { sendDigest } from "@/trends/digest";
 import { recomputeAgentStats, engagementSweep } from "@/analytics/sweep";
 import { applyHealthSignal } from "@/safety/health";
+import { pruneExpired } from "@/banks/trending";
 import { db } from "@/db";
-import { accounts, niches } from "@/db/schema";
+import { accounts } from "@/db/schema";
 import { and, eq, lt } from "drizzle-orm";
 
 /** UTC helper for digest date grouping. */
@@ -89,19 +90,12 @@ export const healthRecalc = inngest.createFunction(
 export const hashtagExpiry = inngest.createFunction(
   { id: "hashtag-trending-expiry" },
   { cron: "0 9 * * 1" },
-  async () => {
-    const now = new Date().toISOString();
+  async ({ step }) => {
     // Drop expired trending tags from each niche bank.
-    const all = await db.select().from(niches);
+    const all = await listNiches();
     let cleaned = 0;
     for (const n of all) {
-      const bank = n.hashtagBank;
-      const before = bank.trending.length;
-      bank.trending = bank.trending.filter((t) => !t.expiresAt || t.expiresAt > now);
-      if (bank.trending.length !== before) {
-        await db.update(niches).set({ hashtagBank: bank }).where(eq(niches.id, n.id));
-        cleaned += before - bank.trending.length;
-      }
+      cleaned += await step.run(`prune-${n.key}`, () => pruneExpired(n.key));
     }
     return { cleaned };
   },

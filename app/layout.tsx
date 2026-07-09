@@ -20,6 +20,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/console">Agent Console</a>
               <a href="/studio">Studio</a>
               <a href="/admin">Admin</a>
+              <a href="/admin/targets">↳ Watch Targets</a>
+              <a href="/admin/trends">↳ Trend Radar</a>
             </nav>
           </aside>
           <main className="main">{children}</main>

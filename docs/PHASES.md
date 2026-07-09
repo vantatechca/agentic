@@ -25,16 +25,32 @@ adapter interfaces so live implementations slot in without refactoring callers.
 - [x] **Admin + dashboard** (`app/admin`, `app/page.tsx`) — fleet health board,
       capability panel, stats.
 
-## P2 — Monitoring 🟡 (scaffolded)
+## P2 — Monitoring ✅ (implemented)
 
 - [x] `SourceAdapter` interface + circuit breaker + manual-refresh fallback.
-- [x] YouTube RSS adapter — **live** (no quota, minutes-fast).
+- [x] YouTube RSS adapter — **live** (no quota, minutes-fast) + Data API
+      enrichment (video description) and `@handle`/URL → channelId resolution.
 - [x] Poll orchestrator: dedup by post URL, create alerts, auto-assign, ping Discord.
-- [x] Trend scan (§7.3) + Discord digest, wired to Inngest crons.
-- [ ] IG/TikTok scrapers: currently trip the breaker (honest "blocked"). Wire an
-      Apify actor in `monitoring/adapters/scrapeStub.ts` when `APIFY_TOKEN` is set.
-- [ ] Trend sources beyond YT Data API: Google Trends proxy, TikTok Creative
-      Center, IG hashtag pages (`trends/scan.ts` → `gatherRawSignals`).
+- [x] Adapter resolver (`monitoring/adapters/resolve.ts`): IG/TikTok use the
+      **Apify** adapter when `APIFY_TOKEN` is set, else the free stub that
+      honestly reports "blocked" so the breaker opens.
+- [x] Apify-backed IG/TikTok adapters (`monitoring/adapters/apify.ts`),
+      configurable actors via `APIFY_IG_ACTOR` / `APIFY_TIKTOK_ACTOR`.
+- [x] Trend Radar multi-source scan (`trends/sources.ts`): Google Trends proxy
+      (no key) + YouTube Data API search, de-duped → LLM ranking (§7.3).
+- [x] Trending-hashtag tier (`banks/trending.ts`): propose → admin-approve →
+      rotate → weekly expiry; enforced by the mixer.
+- [x] APIs: on-demand `POST /api/monitoring/poll`, watch-target CRUD +
+      `…/refresh` (manual-refresh), `POST /api/trends/scan`, hashtag approval.
+- [x] Admin UIs: **Watch Targets** (add/refresh/poll, circuit status) and
+      **Trend Radar** (scan, opportunities, hashtag approval).
+- [ ] TikTok Creative Center source is a named stub (returns []) pending a stable
+      public endpoint/actor — Google Trends + YT cover ranking in the meantime.
+
+> Live YouTube/Google endpoints are blocked by some datacenter egress policies;
+> the code degrades to structured errors + circuit breaker exactly as designed.
+> Allowlist `youtube.com` / `trends.google.com` (or set `APIFY_TOKEN`) to enable
+> the live success paths.
 
 ## P3 — Scheduler 🟡 (scaffolded)
 

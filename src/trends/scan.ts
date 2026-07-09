@@ -1,9 +1,10 @@
 import { db } from "@/db";
 import { trends } from "@/db/schema";
-import { env, capabilities } from "@/env";
+import { capabilities } from "@/env";
 import { generateJson } from "@/ai/provider";
 import { TREND_SYSTEM_PROMPT, buildTrendUserMessage } from "@/ai/prompts";
 import type { NicheProfile } from "@/niches/registry";
+import { gatherSignals } from "./sources";
 
 /**
  * Trend Radar (spec §2 Module 2, §7.3 prompt, P2).
@@ -23,7 +24,7 @@ export type Opportunity = {
 };
 
 export async function scanNiche(niche: NicheProfile, digestDate: string): Promise<Opportunity[]> {
-  const raw = await gatherRawSignals(niche);
+  const raw = await gatherSignals(niche.terms);
   if (!capabilities.hasAnyAI) {
     console.warn("[trends] no AI provider — skipping ranking for", niche.key);
     return [];
@@ -69,38 +70,6 @@ export async function scanNiche(niche: NicheProfile, digestDate: string): Promis
   }
 
   return opportunities;
-}
-
-/** Gather raw candidate topics. YT Data API when available, else empty (P2 extends). */
-async function gatherRawSignals(
-  niche: NicheProfile,
-): Promise<{ topic: string; platform: string; source: string; signal?: string }[]> {
-  const signals: { topic: string; platform: string; source: string; signal?: string }[] = [];
-
-  if (capabilities.hasYouTube && niche.terms.length) {
-    try {
-      const q = encodeURIComponent(niche.terms.slice(0, 3).join(" "));
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount&maxResults=10&q=${q}&key=${env.YOUTUBE_API_KEY}`,
-        { signal: AbortSignal.timeout(15_000) },
-      );
-      if (res.ok) {
-        const data = (await res.json()) as {
-          items?: { snippet?: { title?: string } }[];
-        };
-        for (const it of data.items ?? []) {
-          if (it.snippet?.title) {
-            signals.push({ topic: it.snippet.title, platform: "youtube", source: "yt-data-api" });
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[trends] YT search failed:", (e as Error).message);
-    }
-  }
-
-  // TODO(P2): Google Trends proxy, TikTok Creative Center public pages, IG hashtag pages.
-  return signals;
 }
 
 function clampScore(n: number): number {

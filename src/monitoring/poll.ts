@@ -2,9 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { watchTargets, alerts } from "@/db/schema";
 import type { Platform } from "@/config/app";
-import type { SourceAdapter } from "./adapters/types";
-import { youtubeRssAdapter } from "./adapters/youtubeRss";
-import { instagramScrapeAdapter, tiktokScrapeAdapter } from "./adapters/scrapeStub";
+import { resolveAdapter } from "./adapters/resolve";
+import { enrichVideo } from "./youtube";
 import { assignAlert } from "@/agent-console/assign";
 import { notifyAlert, notifyFleetHealth } from "@/discord/notify";
 
@@ -17,12 +16,6 @@ import { notifyAlert, notifyFleetHealth } from "@/discord/notify";
  * nothing else degrades (spec's honesty note).
  */
 
-const ADAPTERS: Record<Platform, SourceAdapter> = {
-  youtube: youtubeRssAdapter,
-  instagram: instagramScrapeAdapter,
-  tiktok: tiktokScrapeAdapter,
-};
-
 const CIRCUIT_THRESHOLD = 3;
 const CIRCUIT_COOLDOWN_MS = 30 * 60 * 1000;
 
@@ -33,7 +26,7 @@ export async function pollPlatform(platform: Platform): Promise<{ checked: numbe
     .from(watchTargets)
     .where(and(eq(watchTargets.platform, platform), eq(watchTargets.enabled, true)));
 
-  const adapter = ADAPTERS[platform];
+  const adapter = resolveAdapter(platform);
   let checked = 0;
   let newAlerts = 0;
 
@@ -85,6 +78,12 @@ export async function pollPlatform(platform: Platform): Promise<{ checked: numbe
         .where(eq(watchTargets.id, t.id));
 
       for (const post of fresh.reverse()) {
+        // Best-effort YT enrichment (description) — RSS carries only title.
+        let caption = post.caption ?? null;
+        if (platform === "youtube" && !caption) {
+          const enriched = await enrichVideo(post.postId).catch(() => null);
+          caption = enriched?.description ?? null;
+        }
         const inserted = await db
           .insert(alerts)
           .values({
@@ -94,7 +93,7 @@ export async function pollPlatform(platform: Platform): Promise<{ checked: numbe
             postUrl: post.url,
             postId: post.postId,
             title: post.title ?? null,
-            caption: post.caption ?? null,
+            caption,
           })
           .onConflictDoNothing({ target: alerts.postUrl })
           .returning({ id: alerts.id });
