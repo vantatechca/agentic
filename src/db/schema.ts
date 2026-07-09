@@ -21,6 +21,7 @@ export const accountStatusEnum = pgEnum("account_status", ["active", "cooldown",
 export const alertStatusEnum = pgEnum("alert_status", ["new", "claimed", "commented", "expired"]);
 export const commentMethodEnum = pgEnum("comment_method", ["api", "manual"]);
 export const postStatusEnum = pgEnum("post_status", ["queued", "posted", "failed", "needs_human"]);
+export const userRoleEnum = pgEnum("user_role", ["admin", "agent"]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // niches — registry: voice, terms, safe banks per niche
@@ -64,6 +65,8 @@ export const accounts = pgTable(
     platform: platformEnum("platform").notNull(),
     handle: text("handle").notNull(),
     nicheKey: text("niche_key").notNull(),
+    // Owning client/brand (P5). Nullable so pre-existing accounts stay valid.
+    clientId: integer("client_id"),
     adsPowerProfileId: text("adspower_profile_id"),
     // Encrypted-at-rest in prod; jsonb blob of OAuth tokens (YT/IG)
     authTokens: jsonb("auth_tokens").$type<Record<string, unknown>>(),
@@ -323,6 +326,112 @@ export const accountHealthEvents = pgTable("account_health_events", {
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// users — login accounts (P5). Admin manages; agents log in to their run sheet.
+// ─────────────────────────────────────────────────────────────────────────────
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    passwordHash: text("password_hash").notNull(), // scrypt: salt:hash (hex)
+    role: userRoleEnum("role").notNull().default("agent"),
+    // Agent users link to an operator profile (agents) for run sheets/stats.
+    agentId: integer("agent_id"),
+    active: boolean("active").notNull().default(true),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    emailIdx: uniqueIndex("users_email_idx").on(t.email),
+    agentIdx: index("users_agent_idx").on(t.agentId),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// clients — brands the fleet works. Each client is assigned to ONE agent and
+// carries its own set of active platforms (drives the run-sheet quota cards).
+// ─────────────────────────────────────────────────────────────────────────────
+export const clients = pgTable(
+  "clients",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    nicheKey: text("niche_key"),
+    assignedAgentId: integer("assigned_agent_id"),
+    // Enabled platform keys from OPERATOR_PLATFORMS (tiktok, instagram, youtube,
+    // facebook, reddit, gbp). Stored as text[] so it isn't bound to the core
+    // platform enum (FB/Reddit/GBP are operator-managed, not fleet-automated).
+    platforms: jsonb("platforms").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    peakHours: text("peak_hours"), // free text, e.g. "11:00-14:00, 18:00-21:00"
+    status: text("status").notNull().default("active"), // active | paused
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    agentIdx: index("clients_agent_idx").on(t.assignedAgentId),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// run_sheets — one operator, one client, one day. Quota targets + time blocks.
+// Current counts are derived from action_log (not stored here).
+// ─────────────────────────────────────────────────────────────────────────────
+export const runSheets = pgTable(
+  "run_sheets",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("client_id").notNull(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    // quotas: { [platformKey]: dailyOutboundCommentTarget }
+    quotas: jsonb("quotas").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+    // blocks: [{ start, end, label, type: watch|post|admin, done }]
+    blocks: jsonb("blocks").$type<RunBlock[]>().notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    clientDateIdx: uniqueIndex("run_sheets_client_date_idx").on(t.clientId, t.date),
+  }),
+);
+
+export type RunBlock = {
+  start: string; // "08:00"
+  end: string; // "09:00"
+  label: string;
+  type: "watch" | "post" | "admin";
+  done: boolean;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// action_log — record of every logged operator action, with URLs. Drives the
+// outbound comment quota meters and is the canonical post/comment URL history.
+// ─────────────────────────────────────────────────────────────────────────────
+export const actionLog = pgTable(
+  "action_log",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("client_id"),
+    agentId: integer("agent_id"),
+    accountId: integer("account_id"),
+    platform: text("platform").notNull(), // OPERATOR_PLATFORMS key
+    // comment (outbound, counts to quota) | post | reply | dm | review | lead
+    actionType: text("action_type").notNull(),
+    targetUrl: text("target_url"), // the post/thread acted upon
+    resultUrl: text("result_url"), // permalink of our comment/post
+    note: text("note"),
+    countsToQuota: boolean("counts_to_quota").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    clientIdx: index("action_log_client_idx").on(t.clientId),
+    agentIdx: index("action_log_agent_idx").on(t.agentId),
+    createdIdx: index("action_log_created_idx").on(t.createdAt),
+    typeIdx: index("action_log_type_idx").on(t.actionType),
+  }),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Relations

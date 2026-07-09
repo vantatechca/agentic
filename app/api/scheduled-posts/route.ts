@@ -36,7 +36,7 @@ const Body = z.object({
 
 // Create + enqueue a scheduled own-content post.
 export async function POST(req: NextRequest) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));

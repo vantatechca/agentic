@@ -18,6 +18,12 @@ const schema = z.object({
 
   // App
   ADMIN_API_TOKEN: z.string().default("change-me-in-prod"),
+  // Auth (P5): signs session cookies. Defaults to the admin token so the app
+  // still boots; set a dedicated strong secret in production.
+  SESSION_SECRET: z.string().optional(),
+  // Initial admin seeded by `npm run db:seed` when no users exist.
+  ADMIN_EMAIL: z.string().default("admin@agentic.local"),
+  ADMIN_PASSWORD: z.string().default("changeme123"),
 
   // AI providers
   DEEPSEEK_API_KEY: z.string().optional(),

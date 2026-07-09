@@ -13,7 +13,7 @@ export const maxDuration = 60;
  * re-polls its platform, so a human can force a check when scrapers were blocked.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const id = Number(params.id);

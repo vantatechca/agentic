@@ -21,7 +21,7 @@ const Body = z.object({
 
 // Register a media asset (link-based v1; R2/S3 storageKey supported by schema).
 export async function POST(req: NextRequest) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));

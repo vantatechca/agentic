@@ -7,7 +7,7 @@ export const maxDuration = 180;
 
 // Publish a scheduled post immediately (manual trigger / no-Redis fallback).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const id = Number(params.id);

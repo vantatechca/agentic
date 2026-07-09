@@ -30,6 +30,14 @@ envVarGroups:
       # Auto-generated strong secret for the admin API/UI gate.
       - key: ADMIN_API_TOKEN
         generateValue: true
+      # Signs login session cookies (P5). Auto-generated per deploy.
+      - key: SESSION_SECRET
+        generateValue: true
+      # Initial admin login, seeded by `npm run db:seed`.
+      - key: ADMIN_EMAIL
+        value: admin@agentic.local
+      - key: ADMIN_PASSWORD
+        sync: false
 
       # ---- database (Neon) — REQUIRED (also backs the pg-boss queue) ------
       # Paste the Neon connection string (include ?sslmode=require).
