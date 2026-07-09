@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getNiche } from "@/niches/registry";
 import { ensureNicheProfile } from "@/niches/ensureNicheProfile";
 import { generateComments } from "@/comment-studio/generate";
+import { bestToneByNiche } from "@/analytics/whatWorks";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,6 +26,14 @@ export async function POST(req: NextRequest) {
 
   const niche = (await getNiche(b.nicheKey)) ?? (await ensureNicheProfile(b.nicheKey));
 
+  // What-works feedback loop: if the caller didn't pin a tone, bias toward the
+  // niche's best-performing tone by earned engagement (falls back to none).
+  let tonePreference = b.tonePreference;
+  if (!tonePreference) {
+    const best = await bestToneByNiche().catch(() => ({}) as Record<string, string>);
+    if (best[b.nicheKey] && best[b.nicheKey] !== "unknown") tonePreference = best[b.nicheKey];
+  }
+
   try {
     const result = await generateComments({
       platform: b.platform,
@@ -32,7 +41,7 @@ export async function POST(req: NextRequest) {
       videoUrl: b.videoUrl,
       captionOrTitle: b.captionOrTitle,
       transcriptSnippet: b.transcriptSnippet,
-      tonePreference: b.tonePreference,
+      tonePreference,
     });
     return NextResponse.json(result);
   } catch (e) {

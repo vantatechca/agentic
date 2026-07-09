@@ -72,14 +72,22 @@ adapter interfaces so live implementations slot in without refactoring callers.
 > (`{ accessToken }` for YT; `{ igUserId, accessToken }` for IG). Without them,
 > posts record as `needs_human` (reminder flow) — never silently dropped.
 
-## P4 — Feedback 🟡 (scaffolded)
+## P4 — Feedback ✅ (implemented)
 
 - [x] Agent stats recompute (avg claim→posted, comments/day, totals).
-- [x] Engagement sweep hook (writes engagement_log from stored snapshots).
-- [ ] Live per-platform metric pulls in `analytics/sweep.ts` → feed
-      `engagement_zero` health signal + what-works loop.
-- [ ] YT auto-comment opt-in per account: `accounts.ytAutoComment` flag exists;
-      wire API commenting in the comment-dispatch worker for opted-in accounts.
+- [x] **Live engagement sweep** (`analytics/metrics.ts` + `sweep.ts`): re-polls
+      YT comment metrics for API-posted comments (via `platformCommentId`),
+      writes `engagement_log`, and fires `engagement_zero` / `comment_missing`
+      health signals. IG/YT own-post metric fetchers included.
+- [x] **What-works analytics** (`analytics/whatWorks.ts`): tone/niche performance,
+      top comments, best-tone-per-niche. Surfaced at **/admin/analytics**.
+- [x] **Feedback loop closed**: comment generation biases toward the niche's
+      best-performing tone when the caller doesn't pin one.
+- [x] **YT auto-comment opt-in** per account: `dispatchAutoComment` runs the full
+      safety gate, posts via Data API `commentThreads.insert` (per-account OAuth),
+      records `method=api` + `platformCommentId`. Enqueued at the jittered window
+      for opted-in accounts; toggled from the Analytics page.
+- [x] Health tuning: sweep-driven signals feed the existing cooldown/pause logic.
 
 ## Open items (spec §13, decide during P1)
 

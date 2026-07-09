@@ -25,7 +25,7 @@ AdsPower elsewhere).
 | **P1 — Core** | Schema, niche profiles (+SMM fields), Comment Studio + safety layer + banks, Caption Studio, agent console (manual flow), Discord alerts | ✅ Implemented |
 | **P2 — Monitoring** | YT watchlist (RSS/API) full auto, IG/TikTok best-effort scrapers behind `SourceAdapter`, Trend Radar + digest | ✅ Implemented (YT RSS + Data API enrichment; IG/TikTok Apify adapter w/ circuit-breaker fallback; multi-source Trend Radar; hashtag approval; admin UIs) |
 | **P3 — Scheduler** | Own-content posting: YT + IG Graph auto, TikTok reminder-fallback, media library | ✅ Implemented (real YouTube upload + IG Graph publish; media library w/ pluggable store; create→enqueue→publish pipeline + admin UI) |
-| **P4 — Feedback** | Engagement sweep, what-works analytics, health tuning, YT auto-comment opt-in | 🟡 Scaffolded (stats recompute + sweep hooks) |
+| **P4 — Feedback** | Engagement sweep, what-works analytics, health tuning, YT auto-comment opt-in | ✅ Implemented (live YT metric re-poll + health signals; what-works dashboard; tone feedback loop; YT API auto-comment opt-in) |
 
 See [`docs/PHASES.md`](docs/PHASES.md) for the detailed per-phase breakdown and
 what remains in each scaffolded module.

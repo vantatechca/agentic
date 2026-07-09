@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { getConnection, QUEUE_NAMES } from "./connection";
 import type { CommentDispatchJob, PostPublishJob } from "./queues";
 import { publishScheduledPost } from "@/scheduler/publish";
+import { dispatchAutoComment } from "@/comment-studio/autoDispatch";
 
 /**
  * BullMQ worker process (spec §5 "continuous"). Run standalone:
@@ -25,9 +26,11 @@ function main() {
     QUEUE_NAMES.commentDispatch,
     async (job) => {
       console.log(`[worker:comment] dispatch alert=${job.data.alertId} account=${job.data.accountId}`);
-      // P1: manual flow — nothing to auto-post. This keeps the job pipeline
-      // exercised and is the hook point for P4 YT API auto-comment opt-in.
-      return { handled: true };
+      // P4: YT API auto-comment for opted-in accounts. For non-opted accounts
+      // dispatchAutoComment returns ok:false (manual flow stays in the console).
+      const result = await dispatchAutoComment(job.data.alertId, job.data.accountId);
+      if (!result.ok) console.log(`[worker:comment] skipped: ${result.reason}`);
+      return result;
     },
     { connection, concurrency: 5 },
   );

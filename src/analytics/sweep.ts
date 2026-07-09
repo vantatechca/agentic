@@ -1,6 +1,8 @@
 import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { comments, agents, engagementLog, alerts } from "@/db/schema";
+import { fetchYouTubeCommentMetrics } from "./metrics";
+import { applyHealthSignal } from "@/safety/health";
 
 /**
  * Analytics (spec §2 Module 9, §9 per-agent stats, P4).
@@ -53,26 +55,50 @@ export async function recomputeAgentStats(): Promise<number> {
 }
 
 /**
- * Engagement sweep (P4). In production this pulls fresh metrics from each
- * platform for recently-posted comments/posts and writes engagement_log rows,
- * then feeds the health signals (engagement_zero) and what-works loop.
+ * Engagement sweep (P4, spec §5 every 6h). Re-polls live metrics for API-posted
+ * comments that carry a platform comment id, writes engagement_log rows, and
+ * feeds the health signals:
+ *   - a previously-nonzero comment now reading zero  → engagement_zero
+ *   - a comment the platform no longer returns       → comment_missing
+ * Manual comments (no platform id) are counted but can't be re-polled — the
+ * sweep stays honest and skips them rather than inventing zeros.
  */
-export async function engagementSweep(): Promise<{ scanned: number }> {
+export async function engagementSweep(): Promise<{ scanned: number; repolled: number }> {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const recent = await db
-    .select({ id: comments.id, engagement: comments.engagement })
+    .select({
+      id: comments.id,
+      accountId: comments.accountId,
+      platformCommentId: comments.platformCommentId,
+      engagement: comments.engagement,
+    })
     .from(comments)
     .where(and(isNotNull(comments.postedAt), gte(comments.postedAt, since)))
     .limit(500);
 
-  // TODO(P4): fetch live metrics per platform and upsert engagement_log rows.
+  let repolled = 0;
   for (const c of recent) {
-    if (c.engagement) {
-      await db.insert(engagementLog).values([
-        { commentId: c.id, metric: "likes", value: c.engagement.likes ?? 0 },
-        { commentId: c.id, metric: "replies", value: c.engagement.replies ?? 0 },
-      ]);
+    if (!c.platformCommentId) continue; // can only re-poll API-posted (YT) comments
+    const metrics = await fetchYouTubeCommentMetrics(c.platformCommentId);
+    if (!metrics) continue;
+    repolled++;
+
+    const prev = c.engagement;
+    await db
+      .update(comments)
+      .set({ engagement: { likes: metrics.likes, replies: metrics.replies } })
+      .where(eq(comments.id, c.id));
+    await db.insert(engagementLog).values([
+      { commentId: c.id, metric: "likes", value: metrics.likes },
+      { commentId: c.id, metric: "replies", value: metrics.replies },
+    ]);
+
+    // Health signals
+    if (metrics.missing) {
+      await applyHealthSignal(c.accountId, "comment_missing", `comment ${c.id} gone`).catch(() => {});
+    } else if (prev && prev.likes + prev.replies > 0 && metrics.likes + metrics.replies === 0) {
+      await applyHealthSignal(c.accountId, "engagement_zero", `comment ${c.id} dropped to 0`).catch(() => {});
     }
   }
-  return { scanned: recent.length };
+  return { scanned: recent.length, repolled };
 }

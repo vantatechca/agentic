@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { agents, accounts, alerts } from "@/db/schema";
 import { makeCommentWindow, formatWindow } from "@/safety/jitter";
+import { enqueueCommentDispatch } from "@/queue/queues";
 
 /**
  * Agent console assignment (spec §9). New alerts are auto-assigned round-robin
@@ -51,7 +52,7 @@ export async function assignAlert(alertId: number): Promise<AssignResult> {
 
   // 2) an active account in this niche + platform, least-recently-used
   const [account] = await db
-    .select({ id: accounts.id })
+    .select({ id: accounts.id, ytAutoComment: accounts.ytAutoComment, platform: accounts.platform })
     .from(accounts)
     .where(
       and(
@@ -86,6 +87,16 @@ export async function assignAlert(alertId: number): Promise<AssignResult> {
       commentWindowEnd: window.end,
     })
     .where(eq(alerts.id, alertId));
+
+  // P4: for opted-in YouTube accounts, enqueue an auto-comment dispatch at the
+  // window start. Non-opted accounts stay in the manual console flow.
+  if (account && account.platform === "youtube" && account.ytAutoComment) {
+    await enqueueCommentDispatch({
+      alertId,
+      accountId: account.id,
+      runAt: window.start.toISOString(),
+    }).catch((e) => console.warn("[assign] enqueue dispatch failed:", (e as Error).message));
+  }
 
   return {
     agentId: agent?.id ?? null,

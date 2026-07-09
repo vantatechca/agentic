@@ -155,6 +155,9 @@ export const comments = pgTable(
     chosenText: text("chosen_text"),
     tone: text("tone"),
     method: commentMethodEnum("method").notNull().default("manual"),
+    // Platform's own comment id (set for API-posted comments; enables metric
+    // re-polling + removal detection in the engagement sweep).
+    platformCommentId: text("platform_comment_id"),
     postedAt: timestamp("posted_at", { withTimezone: true }),
     // engagement snapshot: { likes, replies }
     engagement: jsonb("engagement").$type<{ likes: number; replies: number }>(),
