@@ -75,7 +75,7 @@ export default async function DashboardPage() {
       <h2>System capabilities</h2>
       <div className="grid cols-3">
         <Cap label="AI provider" ok={capabilities.hasAnyAI} detail={capabilities.hasDeepSeek ? "DeepSeek→Claude" : capabilities.hasClaude ? "Claude only" : "none"} />
-        <Cap label="Queue (Redis)" ok={capabilities.hasRedis} detail="BullMQ dispatch" />
+        <Cap label="Queue (Postgres)" ok={capabilities.hasQueue} detail="pg-boss dispatch" />
         <Cap label="YouTube API" ok={capabilities.hasYouTube} detail="trends + posting" />
         <Cap label="Scrapers (Apify)" ok={capabilities.hasApify} detail="IG/TikTok enrich" />
         <Cap label="Database" ok={capabilities.hasDb} detail="Neon Postgres" />

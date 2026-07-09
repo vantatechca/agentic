@@ -1,55 +1,61 @@
-import { Worker } from "bullmq";
-import { getConnection, QUEUE_NAMES } from "./connection";
+import { getBoss, stopBoss, QUEUE_NAMES } from "./connection";
 import type { CommentDispatchJob, PostPublishJob } from "./queues";
 import { publishScheduledPost } from "@/scheduler/publish";
 import { dispatchAutoComment } from "@/comment-studio/autoDispatch";
 
 /**
- * BullMQ worker process (spec §5 "continuous"). Run standalone:
+ * pg-boss worker process (spec §5 "continuous"). Run standalone:
  *   npm run worker
  *
- * - comment-dispatch: at window start, the alert becomes actionable. In P1 the
- *   flow is human paste via AdsPower, so dispatch just ensures the alert is
- *   surfaced/kept warm; API auto-commenting (P4 opt-in) hooks in here.
+ * - comment-dispatch: at the window start, YT accounts opted into API
+ *   auto-comment post via dispatchAutoComment (full safety gate). Non-opted
+ *   accounts stay in the manual console flow (handler no-ops for them).
  * - post-publisher: publishes own-content posts via the platform adapters,
  *   respecting per-account caps (enforced inside publishScheduledPost).
  */
-
-function main() {
-  const connection = getConnection();
-  if (!connection) {
-    console.error("❌ REDIS_URL not set — worker cannot start.");
+async function main() {
+  const boss = await getBoss();
+  if (!boss) {
+    console.error("❌ DATABASE_URL not set — worker cannot start.");
     process.exit(1);
   }
 
-  const commentWorker = new Worker<CommentDispatchJob>(
+  await boss.work<CommentDispatchJob>(
     QUEUE_NAMES.commentDispatch,
-    async (job) => {
-      console.log(`[worker:comment] dispatch alert=${job.data.alertId} account=${job.data.accountId}`);
-      // P4: YT API auto-comment for opted-in accounts. For non-opted accounts
-      // dispatchAutoComment returns ok:false (manual flow stays in the console).
-      const result = await dispatchAutoComment(job.data.alertId, job.data.accountId);
-      if (!result.ok) console.log(`[worker:comment] skipped: ${result.reason}`);
-      return result;
+    { batchSize: 5 },
+    async (jobs) => {
+      for (const job of jobs) {
+        const { alertId, accountId } = job.data;
+        console.log(`[worker:comment] dispatch alert=${alertId} account=${accountId}`);
+        const result = await dispatchAutoComment(alertId, accountId);
+        if (!result.ok) console.log(`[worker:comment] skipped: ${result.reason}`);
+      }
     },
-    { connection, concurrency: 5 },
   );
 
-  const postWorker = new Worker<PostPublishJob>(
+  await boss.work<PostPublishJob>(
     QUEUE_NAMES.postPublisher,
-    async (job) => {
-      console.log(`[worker:post] publish scheduledPost=${job.data.scheduledPostId}`);
-      return publishScheduledPost(job.data.scheduledPostId);
+    { batchSize: 3 },
+    async (jobs) => {
+      for (const job of jobs) {
+        console.log(`[worker:post] publish scheduledPost=${job.data.scheduledPostId}`);
+        await publishScheduledPost(job.data.scheduledPostId);
+      }
     },
-    { connection, concurrency: 3 },
   );
 
-  for (const w of [commentWorker, postWorker]) {
-    w.on("failed", (job, err) => console.error(`[worker] ${w.name} job ${job?.id} failed:`, err.message));
-    w.on("completed", (job) => console.log(`[worker] ${w.name} job ${job.id} completed`));
-  }
-
-  console.log("✅ Workers started: comment-dispatch, post-publisher");
+  console.log("✅ pg-boss workers started: comment-dispatch, post-publisher");
 }
 
-main();
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, async () => {
+    console.log(`\n[worker] ${sig} — shutting down…`);
+    await stopBoss().catch(() => {});
+    process.exit(0);
+  });
+}
+
+main().catch((err) => {
+  console.error("[worker] fatal:", err);
+  process.exit(1);
+});

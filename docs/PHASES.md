@@ -54,7 +54,7 @@ adapter interfaces so live implementations slot in without refactoring callers.
 
 ## P3 — Scheduler ✅ (implemented)
 
-- [x] `PostAdapter` interface + per-platform adapters + BullMQ publisher pipeline.
+- [x] `PostAdapter` interface + per-platform adapters + pg-boss publisher pipeline.
 - [x] TikTok reminder-fallback (returns `needs_human`, notifies Discord).
 - [x] **YouTube upload** — `videos.insert` multipart upload via per-account OAuth
       token, fetches media bytes from the public URL (`adapters/youtube.ts`).

@@ -6,7 +6,7 @@ import { markActionTaken } from "@/safety/budgets";
 import { notifyFleetHealth } from "@/discord/notify";
 
 /**
- * Publish one scheduled post (called by the BullMQ post-publisher worker).
+ * Publish one scheduled post (called by the pg-boss post-publisher worker).
  * Enforces account status + delegates to the platform adapter. Records the
  * outcome back onto the row. Reminder-mode / missing-credential outcomes land
  * as `needs_human` so an agent can post manually.

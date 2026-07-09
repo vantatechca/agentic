@@ -11,7 +11,7 @@ import { postYouTubeComment } from "./autoComment";
 import { ytVideoId } from "@/analytics/metrics";
 
 /**
- * Auto-comment dispatch (P4 opt-in). Fired by the BullMQ comment-dispatch worker
+ * Auto-comment dispatch (P4 opt-in). Fired by the pg-boss comment-dispatch worker
  * at the alert's comment-window start for YouTube accounts with ytAutoComment.
  *
  * Runs the SAME safety gate as the manual record path (budget, one-per-video,

@@ -10,7 +10,7 @@ import { enqueuePostPublish } from "@/queue/queues";
 /**
  * Create a scheduled own-content post (spec §6 Scheduler). Resolves a media
  * asset to a public URL, optionally generates the caption via Caption Studio
- * (hashtags from the bank), persists the post, and enqueues the BullMQ publish
+ * (hashtags from the bank), persists the post, and enqueues the pg-boss publish
  * job at scheduledAt. TikTok posts still enqueue — the adapter returns
  * needs_human (reminder), which the publisher records.
  */
