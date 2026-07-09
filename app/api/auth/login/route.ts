@@ -8,7 +8,14 @@ import { signSession, SESSION_COOKIE, SESSION_MAX_AGE } from "@/auth/session";
 
 export const dynamic = "force-dynamic";
 
-const Body = z.object({ email: z.string().email(), password: z.string().min(1) });
+// `scope` ties a login to a specific door: the operator login (/login) accepts
+// only agents; the admin login (/admin-login) accepts only admins. Omitted =
+// any role (kept for the API/CI shared-secret callers).
+const Body = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+  scope: z.enum(["admin", "agent"]).optional(),
+});
 
 export async function POST(req: NextRequest) {
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
@@ -23,6 +30,16 @@ export async function POST(req: NextRequest) {
   // Constant-ish failure (don't leak which part was wrong).
   if (!u || !u.active || !(await verifyPassword(parsed.data.password, u.passwordHash))) {
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+  }
+
+  // Wrong door: an admin at /login or an agent at /admin-login is rejected here,
+  // so the two logins stay separate.
+  if (parsed.data.scope && u.role !== parsed.data.scope) {
+    const msg =
+      parsed.data.scope === "admin"
+        ? "This is the admin login. Operators sign in at /login."
+        : "This is the operator login. Admins sign in at the admin login.";
+    return NextResponse.json({ error: msg }, { status: 403 });
   }
 
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, u.id));

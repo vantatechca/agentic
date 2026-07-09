@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export function LoginForm() {
+export function LoginForm({
+  scope,
+  defaultNext = "/",
+}: {
+  scope?: "admin" | "agent";
+  defaultNext?: string;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -16,14 +22,14 @@ export function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, scope }),
       });
       const data = await res.json();
       if (!res.ok) {
         setErr(data.error || "Login failed");
       } else {
         const params = new URLSearchParams(window.location.search);
-        window.location.href = params.get("next") || "/";
+        window.location.href = params.get("next") || defaultNext;
       }
     } catch (e) {
       setErr((e as Error).message);

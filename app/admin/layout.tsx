@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/auth/server";
 // this enforces the role.
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/admin-login");
   if (user.role !== "admin") redirect("/run");
   return <>{children}</>;
 }
