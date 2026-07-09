@@ -26,6 +26,7 @@ AdsPower elsewhere).
 | **P2 — Monitoring** | YT watchlist (RSS/API) full auto, IG/TikTok best-effort scrapers behind `SourceAdapter`, Trend Radar + digest | ✅ Implemented (YT RSS + Data API enrichment; IG/TikTok Apify adapter w/ circuit-breaker fallback; multi-source Trend Radar; hashtag approval; admin UIs) |
 | **P3 — Scheduler** | Own-content posting: YT + IG Graph auto, TikTok reminder-fallback, media library | ✅ Implemented (real YouTube upload + IG Graph publish; media library w/ pluggable store; create→enqueue→publish pipeline + admin UI) |
 | **P4 — Feedback** | Engagement sweep, what-works analytics, health tuning, YT auto-comment opt-in | ✅ Implemented (live YT metric re-poll + health signals; what-works dashboard; tone feedback loop; YT API auto-comment opt-in) |
+| **P5 — Admin & Ops** | Login/auth (admin + agent), clients, per-agent run sheets, URL/activity log | ✅ Implemented (scrypt+session gate; admin control center; clients→agent assignment; operator "Today's run"; post/comment URL log) |
 
 See [`docs/PHASES.md`](docs/PHASES.md) for the detailed per-phase breakdown and
 what remains in each scaffolded module.
@@ -99,6 +100,28 @@ The part that keeps 50+ accounts alive, implemented in `src/safety/`:
 
 Every generation path runs the scrubber + simhash pre-display; every posted
 comment passes a second live safety gate in `comment-studio/record.ts`.
+
+## Accounts, clients & the operator run sheet (P5)
+
+The app is gated behind login (email + password, hashed with scrypt, signed
+httpOnly session cookie). Two roles:
+
+- **Admin** — the control center at `/admin`: create login users, add **clients**
+  (brands) and assign each to one agent, set each client's platforms, edit the
+  daily **run sheet** (per-platform comment quotas + time blocks), and view the
+  **URL / activity log** (every logged post + commented-post URL). Admins also
+  reach fleet health, watch targets, trend radar, scheduler, and analytics.
+- **Agent** — `/run` is their "Today's run": quota meters that fill as they log
+  actions, the admin-authored time blocks to check off, and a log-action form
+  that records the target URL + the resulting comment/post URL.
+
+First login uses the seeded admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`); change the
+password from **Admin → Users** after logging in. Set a strong `SESSION_SECRET`
+in production.
+
+Operator platforms (TikTok, Instagram, YouTube, Facebook, Reddit, GBP) are a
+superset of the fleet-automation platforms — a client enables whichever apply,
+and the run-sheet cards follow that selection.
 
 ## Deploy (Render + Neon)
 

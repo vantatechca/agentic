@@ -29,7 +29,7 @@ const Body = z.object({
 // Add a watch target. For YouTube, resolves @handle/URL → channelId when a
 // YOUTUBE_API_KEY is present (RSS needs a channelId).
 export async function POST(req: NextRequest) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));

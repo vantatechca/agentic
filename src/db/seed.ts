@@ -1,8 +1,11 @@
+import { eq, sql } from "drizzle-orm";
 import { db } from "./index";
-import { niches, agents, accounts, watchTargets } from "./schema";
+import { niches, agents, accounts, watchTargets, users, clients } from "./schema";
 import { SEED_NICHES } from "@/niches/seeds";
 import { GLOBAL_BANNED_WORDS } from "@/safety/bannedWords";
 import { randomDailyCommentBudget } from "@/safety/jitter";
+import { hashPassword } from "@/auth/password";
+import { env } from "@/env";
 
 /**
  * Seed the fleet with the built-in niches, a couple of demo agents/accounts,
@@ -70,6 +73,34 @@ async function main() {
       },
     ])
     .onConflictDoNothing({ target: [watchTargets.platform, watchTargets.handle] });
+
+  // Initial admin login (only if no users exist yet).
+  const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
+  if (Number(count) === 0) {
+    console.log(`Seeding admin user (${env.ADMIN_EMAIL})…`);
+    await db.insert(users).values({
+      email: env.ADMIN_EMAIL.toLowerCase(),
+      name: "Admin",
+      passwordHash: await hashPassword(env.ADMIN_PASSWORD),
+      role: "admin",
+    });
+    console.log(`   → login with ${env.ADMIN_EMAIL} / (ADMIN_PASSWORD). Change it after first login.`);
+  }
+
+  // Demo client assigned to the first agent, with a few platforms.
+  const [firstAgent] = await db.select().from(agents).limit(1);
+  const platforms = ["tiktok", "instagram", "youtube", "gbp"];
+  const existingClient = await db.select({ id: clients.id }).from(clients).where(eq(clients.name, "Demo Brand")).limit(1);
+  if (!existingClient[0]) {
+    console.log("Seeding demo client…");
+    await db.insert(clients).values({
+      name: "Demo Brand",
+      nicheKey: "restaurant",
+      assignedAgentId: firstAgent?.id ?? null,
+      platforms,
+      peakHours: "11:00-14:00, 18:00-21:00",
+    });
+  }
 
   console.log("✅ Seed complete.");
 }

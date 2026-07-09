@@ -11,7 +11,7 @@ const Body = z.object({ ytAutoComment: z.boolean() });
 
 // Toggle YouTube API auto-comment opt-in per account (spec §11 P4).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const id = Number(params.id);

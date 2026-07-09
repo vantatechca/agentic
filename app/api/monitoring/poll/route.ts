@@ -12,7 +12,7 @@ const Body = z.object({
 
 // On-demand watchlist poll (spec §5 manual trigger / manual-refresh fallback).
 export async function POST(req: NextRequest) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));

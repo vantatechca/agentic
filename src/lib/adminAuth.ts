@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
+import { SESSION_COOKIE, verifySession } from "@/auth/session";
 
 /**
- * Minimal shared-secret gate for mutating/admin API routes (P1 placeholder,
- * replace with real auth later). Accepts `Authorization: Bearer <token>` or
- * `x-admin-token: <token>` matching ADMIN_API_TOKEN.
+ * Admin gate for mutating/admin API routes. Accepts EITHER:
+ *   - a valid admin **session** cookie (the real login, P5), or
+ *   - the `x-admin-token` / `Authorization: Bearer` shared secret (legacy/CI).
  *
- * Returns a NextResponse (401) when unauthorized, or null when the request may
- * proceed. In development with the default token, access is allowed but warned.
+ * Returns a NextResponse (401/403/503) when unauthorized, or null to proceed.
+ * Async because session verification is async (HMAC).
  */
-export function requireAdmin(req: NextRequest): NextResponse | null {
+export async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
+  // 1) Session cookie with admin role
+  const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (session) {
+    return session.role === "admin"
+      ? null
+      : NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // 2) Shared-secret fallback
   const provided =
     req.headers.get("x-admin-token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
@@ -22,8 +32,7 @@ export function requireAdmin(req: NextRequest): NextResponse | null {
         { status: 503 },
       );
     }
-    // dev convenience: allow but do not require a token
-    return null;
+    return null; // dev convenience
   }
 
   if (provided !== env.ADMIN_API_TOKEN) {

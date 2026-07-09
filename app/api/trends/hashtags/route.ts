@@ -15,7 +15,7 @@ const Body = z.object({
 
 // Approve/reject a proposed trending hashtag, or propose new ones (spec §8).
 export async function POST(req: NextRequest) {
-  const denied = requireAdmin(req);
+  const denied = await requireAdmin(req);
   if (denied) return denied;
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
