@@ -4,6 +4,7 @@ import { getNiche } from "@/niches/registry";
 import { ensureNicheProfile } from "@/niches/ensureNicheProfile";
 import { generateComments } from "@/comment-studio/generate";
 import { bestToneByNiche } from "@/analytics/whatWorks";
+import { requireUserRoute } from "@/auth/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -18,6 +19,9 @@ const Body = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await requireUserRoute(req);
+  if ("response" in auth) return auth.response;
+
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

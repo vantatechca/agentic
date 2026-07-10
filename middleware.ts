@@ -1,30 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySession } from "@/auth/session";
 
 /**
- * Auth wall (P5). Every page and API route requires a valid session, except:
- *   - /login, /admin-login, /api/auth/*   (the two login flows)
- *   - /api/inngest                         (called by Inngest Cloud, own signing)
- *   - Next internals / static assets
+ * Auth wall (P5) — coarse gate only.
  *
- * Two separate logins: operators at /login, admins at /admin-login. An
- * unauthenticated visitor to an /admin* page is sent to /admin-login; everyone
- * else to /login. Runs on the edge; session verification uses Web Crypto.
+ * The middleware runs on the Edge runtime, where env-var propagation (and thus
+ * the HMAC secret) is unreliable across build/runtime. Verifying the session
+ * signature here risks disagreeing with the Node runtime and causing an infinite
+ * redirect loop. So the middleware only checks whether a session cookie is
+ * PRESENT and routes unauthenticated visitors to the right login. The real
+ * cryptographic verification + user lookup happens in Node — every server
+ * component (getCurrentUser) and every API route (requireUserRoute/requireAdmin)
+ * verifies the signature, so a bare/forged cookie grants nothing.
+ *
+ * Logins: operators at /login, admins at /admin-login. An unauthenticated visit
+ * to an /admin* page is sent to /admin-login; everyone else to /login.
  */
+const SESSION_COOKIE = "agentic_session";
 const PUBLIC_PATHS = ["/login", "/admin-login", "/api/auth/login", "/api/inngest"];
 
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     return NextResponse.next();
   }
 
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const session = await verifySession(token);
-  if (session) return NextResponse.next();
+  const hasCookie = Boolean(req.cookies.get(SESSION_COOKIE)?.value);
+  if (hasCookie) return NextResponse.next();
 
-  // Unauthenticated
+  // No session cookie at all → send to the appropriate login (pages) or 401 (api).
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

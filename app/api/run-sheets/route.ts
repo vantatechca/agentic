@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateRunSheet } from "@/run/service";
 import { todayStr } from "@/config/operators";
+import { requireUserRoute } from "@/auth/server";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 // Any authenticated user may read (middleware enforces auth); the operator UI
 // only requests sheets for the client they're assigned to.
 export async function GET(req: NextRequest) {
+  const auth = await requireUserRoute(req);
+  if ("response" in auth) return auth.response;
+
   const { searchParams } = new URL(req.url);
   const clientId = Number(searchParams.get("clientId"));
   const date = searchParams.get("date") || todayStr();

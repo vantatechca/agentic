@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, alerts, comments, agents } from "@/db/schema";
 import { capabilities } from "@/env";
+import { getCurrentUser } from "@/auth/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,9 @@ async function safeCount(fn: () => Promise<number>): Promise<number | null> {
 }
 
 export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const dbReady = capabilities.hasDb;
 
   const [accountCount, activeCount, openAlerts, commentsToday, agentCount] = dbReady

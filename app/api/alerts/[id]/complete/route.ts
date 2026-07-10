@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { alerts } from "@/db/schema";
 import { getNiche } from "@/niches/registry";
 import { recordComment } from "@/comment-studio/record";
+import { requireUserRoute } from "@/auth/server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ const Body = z.object({
 // Mark an alert done: paste-confirm records the posted comment (method=manual)
 // after passing the final safety gate. (spec §9)
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await requireUserRoute(req);
+  if ("response" in auth) return auth.response;
+
   const id = Number(params.id);
   if (!Number.isFinite(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
 

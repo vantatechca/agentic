@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { actionLog, clients } from "@/db/schema";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MyActivityPage() {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user) redirect("/login");
 
   // Admins get the full log page; agents see only their own actions here.
   const rows = await db

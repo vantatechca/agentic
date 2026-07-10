@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { clients } from "@/db/schema";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RunPage({ searchParams }: { searchParams: { clientId?: string } }) {
   const user = await getCurrentUser();
-  if (!user) return null; // middleware redirects; defensive
+  if (!user) redirect("/login"); // cookie missing/invalid → real login (Node verify)
 
   // Which clients can this user work? Agent → assigned; admin → all.
   const visible =

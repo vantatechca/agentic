@@ -1,13 +1,18 @@
+import { redirect } from "next/navigation";
 import { desc, inArray, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { alerts, accounts, agents } from "@/db/schema";
 import { capabilities } from "@/env";
 import { AlertCard } from "./AlertCard";
 import { formatWindow } from "@/safety/jitter";
+import { getCurrentUser } from "@/auth/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConsolePage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   if (!capabilities.hasDb) {
     return (
       <>
