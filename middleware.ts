@@ -3,14 +3,15 @@ import { SESSION_COOKIE, verifySession } from "@/auth/session";
 
 /**
  * Auth wall (P5). Every page and API route requires a valid session, except:
- *   - /login and /api/auth/*      (the login flow itself)
- *   - /api/inngest                (called by Inngest Cloud with its own signing)
+ *   - /login, /admin-login, /api/auth/*   (the two login flows)
+ *   - /api/inngest                         (called by Inngest Cloud, own signing)
  *   - Next internals / static assets
  *
- * Runs on the edge; session verification uses Web Crypto (see auth/session.ts).
- * Role-based visibility (admin vs agent) is enforced in the pages/routes.
+ * Two separate logins: operators at /login, admins at /admin-login. An
+ * unauthenticated visitor to an /admin* page is sent to /admin-login; everyone
+ * else to /login. Runs on the edge; session verification uses Web Crypto.
  */
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/inngest"];
+const PUBLIC_PATHS = ["/login", "/admin-login", "/api/auth/login", "/api/inngest"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -28,7 +29,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const url = req.nextUrl.clone();
-  url.pathname = "/login";
+  url.pathname = pathname.startsWith("/admin") ? "/admin-login" : "/login";
   url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
 }
