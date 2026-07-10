@@ -1,5 +1,3 @@
-import { env } from "@/env";
-
 /**
  * Stateless signed-session tokens using Web Crypto HMAC-SHA-256, so the exact
  * same verify path works in Next middleware (edge runtime) and in Node route
@@ -7,6 +5,12 @@ import { env } from "@/env";
  *
  * Payload: { uid, role, exp }. No secrets in the payload; it's signed, not
  * encrypted, so treat it as tamper-evident but readable.
+ *
+ * IMPORTANT: the secret is read via *static* `process.env.X` access (not through
+ * the zod `env` object). Next.js inlines statically-referenced env vars into the
+ * Edge middleware bundle at build time; a dynamic `process.env` parse is NOT
+ * populated on the edge, which would make the middleware verify with a different
+ * secret than the Node login route signs with — an infinite redirect loop.
  */
 export const SESSION_COOKIE = "agentic_session";
 const MAX_AGE_SEC = 60 * 60 * 24 * 7; // 7 days
@@ -14,7 +18,11 @@ const MAX_AGE_SEC = 60 * 60 * 24 * 7; // 7 days
 export type SessionPayload = { uid: number; role: "admin" | "agent"; exp: number };
 
 function secretKeyMaterial(): string {
-  return env.SESSION_SECRET || env.ADMIN_API_TOKEN || "insecure-dev-secret";
+  return (
+    process.env.SESSION_SECRET ||
+    process.env.ADMIN_API_TOKEN ||
+    "insecure-dev-secret"
+  );
 }
 
 function b64urlEncode(bytes: Uint8Array): string {
