@@ -7,22 +7,15 @@ type Acct = { id: number; handle: string; ytAutoComment: boolean; hasToken: bool
 
 export function OptInToggles({ accounts }: { accounts: Acct[] }) {
   const router = useRouter();
-  const [token, setToken] = useState<string>(
-    typeof window !== "undefined" ? localStorage.getItem("adminToken") || "" : "",
-  );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  function saveToken(t: string) {
-    setToken(t);
-    if (typeof window !== "undefined") localStorage.setItem("adminToken", t);
-  }
-
   async function toggle(id: number, next: boolean) {
     setBusy(true);
+    // Admin session cookie authorizes this request automatically (same-origin).
     const res = await fetch(`/api/accounts/${id}/opt-in`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-token": token },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ytAutoComment: next }),
     });
     const data = await res.json();
@@ -35,10 +28,6 @@ export function OptInToggles({ accounts }: { accounts: Acct[] }) {
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div className="subtle" style={{ fontSize: 12 }}>Admin token</div>
-        <input type="password" value={token} onChange={(e) => saveToken(e.target.value)} placeholder="ADMIN_API_TOKEN" />
-      </div>
       <div className="card" style={{ padding: 0 }}>
         <table>
           <thead><tr><th>Handle</th><th>OAuth token</th><th>Auto-comment</th><th></th></tr></thead>
