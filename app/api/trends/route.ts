@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { trends } from "@/db/schema";
+import { requireUserRoute } from "@/auth/server";
 
 export const dynamic = "force-dynamic";
 
 // List recent trend opportunities, optionally filtered by niche + digest date.
 export async function GET(req: NextRequest) {
+  const auth = await requireUserRoute(req);
+  if ("response" in auth) return auth.response;
+
   const { searchParams } = new URL(req.url);
   const nicheKey = searchParams.get("niche");
   const digestDate = searchParams.get("date");
