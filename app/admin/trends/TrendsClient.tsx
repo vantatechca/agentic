@@ -27,17 +27,10 @@ export function TrendsClient({
   aiOn: boolean;
 }) {
   const router = useRouter();
-  const [token, setToken] = useState<string>(
-    typeof window !== "undefined" ? localStorage.getItem("adminToken") || "" : "",
-  );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const headers = { "Content-Type": "application/json", "x-admin-token": token };
-
-  function saveToken(t: string) {
-    setToken(t);
-    if (typeof window !== "undefined") localStorage.setItem("adminToken", t);
-  }
+  // Admin session cookie authorizes these requests automatically (same-origin).
+  const headers = { "Content-Type": "application/json" };
 
   async function scan() {
     setBusy(true);
@@ -74,11 +67,7 @@ export function TrendsClient({
 
   return (
     <>
-      <div className="card" style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-        <label style={{ flex: 1, minWidth: 240 }}>
-          <div className="subtle" style={{ fontSize: 12 }}>Admin token</div>
-          <input type="password" value={token} onChange={(e) => saveToken(e.target.value)} placeholder="ADMIN_API_TOKEN" />
-        </label>
+      <div className="card" style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={scan} disabled={busy}>Scan trends now</button>
       </div>
       {!aiOn && (

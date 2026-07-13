@@ -26,17 +26,10 @@ export function SchedulerClient({
   posts: Post[];
 }) {
   const router = useRouter();
-  const [token, setToken] = useState<string>(
-    typeof window !== "undefined" ? localStorage.getItem("adminToken") || "" : "",
-  );
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const headers = { "Content-Type": "application/json", "x-admin-token": token };
-
-  function saveToken(t: string) {
-    setToken(t);
-    if (typeof window !== "undefined") localStorage.setItem("adminToken", t);
-  }
+  // Admin session cookie authorizes these requests automatically (same-origin).
+  const headers = { "Content-Type": "application/json" };
 
   // media register form
   const [mediaForm, setMediaForm] = useState({ kind: "image", url: "", description: "" });
@@ -92,11 +85,6 @@ export function SchedulerClient({
 
   return (
     <>
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="subtle" style={{ fontSize: 12 }}>Admin token</div>
-        <input type="password" value={token} onChange={(e) => saveToken(e.target.value)} placeholder="ADMIN_API_TOKEN" />
-      </div>
-
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 14, gap: 14 }}>
         <div className="card">
           <h2 style={{ marginTop: 0 }}>Register media</h2>

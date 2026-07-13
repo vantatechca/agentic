@@ -16,22 +16,6 @@ type Target = {
 };
 type Niche = { key: string; name: string };
 
-/**
- * Admin token is read from localStorage (set once via the field below) and sent
- * as x-admin-token. This keeps the P1 shared-secret gate usable without real
- * auth wiring; replace with a session when auth lands.
- */
-function useAdminToken() {
-  const [token, setToken] = useState<string>(
-    typeof window !== "undefined" ? localStorage.getItem("adminToken") || "" : "",
-  );
-  const save = (t: string) => {
-    setToken(t);
-    if (typeof window !== "undefined") localStorage.setItem("adminToken", t);
-  };
-  return { token, save };
-}
-
 export function TargetsClient({
   targets,
   niches,
@@ -42,7 +26,6 @@ export function TargetsClient({
   apifyOn: boolean;
 }) {
   const router = useRouter();
-  const { token, save } = useAdminToken();
   const [form, setForm] = useState({
     platform: "youtube",
     handle: "",
@@ -51,7 +34,8 @@ export function TargetsClient({
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const headers = { "Content-Type": "application/json", "x-admin-token": token };
+  // Admin session cookie authorizes these requests automatically (same-origin).
+  const headers = { "Content-Type": "application/json" };
 
   async function addTarget() {
     setBusy(true);
@@ -88,14 +72,7 @@ export function TargetsClient({
   return (
     <>
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="subtle" style={{ fontSize: 12, marginBottom: 4 }}>Admin token</div>
-        <input
-          type="password"
-          placeholder="ADMIN_API_TOKEN (stored locally)"
-          value={token}
-          onChange={(e) => save(e.target.value)}
-        />
-        <div className="subtle" style={{ fontSize: 11, marginTop: 6 }}>
+        <div className="subtle" style={{ fontSize: 12 }}>
           IG/TikTok scraping: {apifyOn ? "Apify enabled" : "free best-effort (expect circuit trips)"}
         </div>
       </div>
